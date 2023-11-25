@@ -31,6 +31,8 @@ var (
 	powerDNSSubdomainAddress string
 	dbConn                   *sqlx.DB
 	secret                   = []byte("isucon13_session_cookiestore_defaultsecret")
+	tagById 				 map[int64]Tag
+	tagByName 				 map[string]Tag
 )
 
 func init() {
@@ -116,6 +118,21 @@ func initializeHandler(c echo.Context) error {
 	if err := os.RemoveAll("../public/api/user"); err != nil {
 		c.Logger().Warnf("failed to remove icon directory: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+err.Error())
+	}
+
+	var allTags []Tag
+	// 全タグを取得してグローバル変数に格納しておく
+	if err := dbConn.Select(&allTags, "SELECT * FROM tag"); err != nil {
+		c.Logger().Warnf("failed to get all tags: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+err.Error())
+	}
+	tagById = make(map[int64]Tag)
+	for _, tag := range allTags {
+		tagById[tag.ID] = tag
+	}
+	tagByName = make(map[string]Tag)
+	for _, tag := range allTags {
+		tagByName[tag.Name] = tag
 	}
 
 	c.Request().Header.Add("Content-Type", "application/json;charset=utf-8")

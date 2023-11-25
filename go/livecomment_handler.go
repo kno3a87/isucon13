@@ -104,6 +104,7 @@ func getLivecommentsHandler(c echo.Context) error {
 
 	livecomments := make([]Livecomment, len(livecommentModels))
 	for i := range livecommentModels {
+		// ここで N+1 問題が発生している
 		livecomment, err := fillLivecommentResponse(ctx, tx, livecommentModels[i])
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
@@ -427,6 +428,7 @@ func fillLivecommentResponse(ctx context.Context, tx *sqlx.Tx, livecommentModel 
 	if err := tx.GetContext(ctx, &commentOwnerModel, "SELECT * FROM users WHERE id = ?", livecommentModel.UserID); err != nil {
 		return Livecomment{}, err
 	}
+	// この中でクエリが実行されている
 	commentOwner, err := fillUserResponse(ctx, tx, commentOwnerModel)
 	if err != nil {
 		return Livecomment{}, err
