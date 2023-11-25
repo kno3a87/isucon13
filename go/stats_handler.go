@@ -144,40 +144,52 @@ func getUserStatisticsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count total reactions: "+err.Error())
 	}
 
-	// ライブコメント数、チップ合計，合計視聴者数
+	// ライブコメント数、チップ合計
 	type Tmp struct {
 		TotalLivecomments int64 `db:"totalLivecomments"`
 		TotalTip          int64 `db:"totalTip"`
-		ViewersCount      int64 `db:"viewersCount"`
 	}
 	var tmp Tmp
 	query2 := `
 SELECT 
-    COALESCE(COUNT(DISTINCT lc.id), 0) AS totalLivecomments,
-    COALESCE(SUM(lc.tip), 0) AS totalTip,
-    COALESCE(SUM(lvh.count), 0) AS viewersCount
+	COUNT(lc.id) AS totalLivecomments, 
+	IFNULL(SUM(lc.tip), 0) AS totalTip 
 FROM 
-    livestreams ls
-LEFT JOIN 
-    livecomments lc ON lc.livestream_id = ls.id
-LEFT JOIN (
-    SELECT 
-        livestream_id,
-        COUNT(*) AS count
-    FROM 
-        livestream_viewers_history
-    GROUP BY 
-        livestream_id
-) lvh ON ls.id = lvh.livestream_id
-WHERE 
-    ls.user_id = ?;
-	`
+	livestreams ls
+	LEFT JOIN livecomments lc ON lc.livestream_id = ls.id
+WHERE
+	ls.user_id = ?
+`
 	if err := tx.GetContext(ctx, &tmp, query2, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams data: "+err.Error())
 	}
-	fmt.Println("ライブコメント数合計：", tmp.TotalLivecomments)
-	fmt.Println("チップ合計：", tmp.TotalTip)
-	fmt.Println("合計視聴者数：", tmp.ViewersCount)
+	totalLivecomments := tmp.TotalLivecomments
+	totalTip := tmp.TotalTip
+	fmt.Println("ライブコメント数合計：", totalLivecomments)
+	fmt.Println("チップ合計：", totalTip)
+
+	// 合計視聴者数
+	var viewersCount int64
+	query3 := `
+SELECT
+    COALESCE(SUM(lvh.count), 0) AS viewers_count
+FROM
+    livestreams ls
+LEFT JOIN (
+    SELECT
+        livestream_id,
+        COUNT(*) AS count
+    FROM
+        livestream_viewers_history
+    GROUP BY
+        livestream_id
+) lvh ON ls.id = lvh.livestream_id
+WHERE
+    ls.user_id = ?;
+`
+	if err := tx.GetContext(ctx, &viewersCount, query3, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams data: "+err.Error())
+	}
 
 	// お気に入り絵文字
 	var favoriteEmoji string
@@ -197,10 +209,10 @@ WHERE
 
 	stats := UserStatistics{
 		Rank:              rank,
-		ViewersCount:      tmp.ViewersCount,
+		ViewersCount:      viewersCount,
 		TotalReactions:    totalReactions,
-		TotalLivecomments: tmp.TotalLivecomments,
-		TotalTip:          tmp.TotalTip,
+		TotalLivecomments: totalLivecomments,
+		TotalTip:          totalTip,
 		FavoriteEmoji:     favoriteEmoji,
 	}
 	return c.JSON(http.StatusOK, stats)
