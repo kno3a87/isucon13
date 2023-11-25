@@ -169,19 +169,18 @@ WHERE
 	fmt.Println("チップ合計：", totalTip)
 
 	// 合計視聴者数
-	var viewersCount int64
-	query3 := `
-SELECT 
-	IFNULL(SUM(viewersCount), 0) AS viewersCount 
-FROM 
-	livestream_viewers_history 
-WHERE 
-	livestream_id IN (SELECT id FROM livestreams WHERE user_id = ?)
-`
-	if err := tx.GetContext(ctx, &viewersCount, query3, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get viewers count: "+err.Error())
+	var livestreams []*LivestreamModel
+	if err := tx.SelectContext(ctx, &livestreams, "SELECT * FROM livestreams WHERE user_id = ?", user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams: "+err.Error())
 	}
-	fmt.Println("合計視聴者数：", viewersCount)
+	var viewersCount int64
+	for _, livestream := range livestreams {
+		var cnt int64
+		if err := tx.GetContext(ctx, &cnt, "SELECT COUNT(*) FROM livestream_viewers_history WHERE livestream_id = ?", livestream.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestream_view_history: "+err.Error())
+		}
+		viewersCount += cnt
+	}
 
 	// お気に入り絵文字
 	var favoriteEmoji string
