@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
@@ -144,10 +145,15 @@ func postIconHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete old user icon: "+err.Error())
 	}
 
-	rs, err := tx.ExecContext(ctx, "INSERT INTO icons (user_id, image) VALUES (?, ?)", userID, req.Image)
+	iconHash := fmt.Sprintf("%x", sha256.Sum256(req.Image))
+
+	// ファイルに保存するので DB には保存しない
+	rs, err := tx.ExecContext(ctx, "INSERT INTO icons (user_id, image, icon_hash) VALUES (?, ?, ?)", userID, []byte{}, iconHash)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert new user icon: "+err.Error())
 	}
+
+	go saveImage(userID, req.Image)
 
 	iconID, err := rs.LastInsertId()
 	if err != nil {
@@ -161,6 +167,36 @@ func postIconHandler(c echo.Context) error {
 	return c.JSON(http.StatusCreated, &PostIconResponse{
 		ID: iconID,
 	})
+}
+
+func saveImage(userID int64, image []byte) error {
+	// userID から username を取得
+	var username string
+	if err := dbConn.Get(&username, "SELECT name FROM users WHERE id = ?", userID); err != nil {
+		return err
+	}
+
+    filePath := filepath.Join("../public/api/user/", username, "icon")
+
+	// ファイルパスのディレクトリを作成 (再帰的に)
+	dirPath := filepath.Dir(filePath)
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		return err
+	}
+
+    // ファイルが既に存在する場合は削除
+    if _, err := os.Stat(filePath); err == nil {
+        if err := os.Remove(filePath); err != nil {
+            return err
+        }
+    }
+
+    // 新しいファイルを書き込む
+    if err := os.WriteFile(filePath, image, 0666); err != nil {
+        return err
+    }
+    
+    return nil
 }
 
 func getMeHandler(c echo.Context) error {
@@ -404,17 +440,14 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 		return User{}, err
 	}
 
-	var image []byte
-	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
+	var iconHash string
+	if err := tx.GetContext(ctx, &iconHash, "SELECT icon_hash FROM icons WHERE user_id = ?", userModel.ID); err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			return User{}, err
 		}
-		image, err = os.ReadFile(fallbackImage)
-		if err != nil {
-			return User{}, err
-		}
+		// fallbackImage
+		iconHash = "d9f8294e9d895f81ce62e73dc7d5dff862a4fa40bd4e0fecf53f7526a8edcac0"
 	}
-	iconHash := sha256.Sum256(image)
 
 	user := User{
 		ID:          userModel.ID,
@@ -425,7 +458,7 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 			ID:       themeModel.ID,
 			DarkMode: themeModel.DarkMode,
 		},
-		IconHash: fmt.Sprintf("%x", iconHash),
+		IconHash: iconHash,
 	}
 
 	return user, nil
