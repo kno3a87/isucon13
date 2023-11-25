@@ -247,6 +247,11 @@ func postLivecommentHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill livecomment: "+err.Error())
 	}
 
+	// ライブコメントで付与したチップを users テーブルの total_tip に加算する
+	if _, err := tx.ExecContext(ctx, "UPDATE users SET total_tip = total_tip + ? WHERE id = ?", req.Tip, userID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update total_tip: "+err.Error())
+	}
+
 	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
 	}
