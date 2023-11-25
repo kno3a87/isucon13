@@ -88,6 +88,30 @@ func getUserStatisticsHandler(c echo.Context) error {
 		}
 	}
 
+	// ライブコメント数、チップ合計
+	type Tmp struct {
+		TotalLivecomments int64 `db:"totalLivecomments"`
+		TotalTip          int64 `db:"totalTip"`
+	}
+	var tmp Tmp
+	query2 := `
+SELECT 
+	COUNT(lc.id) AS totalLivecomments, 
+	IFNULL(SUM(lc.tip), 0) AS totalTip 
+FROM 
+	livestreams ls
+	LEFT JOIN livecomments lc ON lc.livestream_id = ls.id
+WHERE
+	ls.user_id = ?
+`
+	if err := tx.GetContext(ctx, &tmp, query2, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams data: "+err.Error())
+	}
+	totalLivecomments := tmp.TotalLivecomments
+	totalTip := tmp.TotalTip
+	fmt.Println("ライブコメント数合計：", totalLivecomments)
+	fmt.Println("チップ合計：", totalTip)
+
 	// ランク算出
 	var users []*UserModel
 	if err := tx.SelectContext(ctx, &users, "SELECT * FROM users"); err != nil {
@@ -106,17 +130,17 @@ func getUserStatisticsHandler(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to count reactions: "+err.Error())
 		}
 
-		var tips int64
-		query = `
-		SELECT IFNULL(SUM(l2.tip), 0) FROM users u
-		INNER JOIN livestreams l ON l.user_id = u.id	
-		INNER JOIN livecomments l2 ON l2.livestream_id = l.id
-		WHERE u.id = ?`
-		if err := tx.GetContext(ctx, &tips, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to count tips: "+err.Error())
-		}
+		// var tips int64
+		// query = `
+		// SELECT IFNULL(SUM(l2.tip), 0) FROM users u
+		// INNER JOIN livestreams l ON l.user_id = u.id
+		// INNER JOIN livecomments l2 ON l2.livestream_id = l.id
+		// WHERE u.id = ?`
+		// if err := tx.GetContext(ctx, &tips, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		// 	return echo.NewHTTPError(http.StatusInternalServerError, "failed to count tips: "+err.Error())
+		// }
 
-		score := reactions + tips
+		score := reactions + totalTip
 		ranking = append(ranking, UserRankingEntry{
 			Username: user.Name,
 			Score:    score,
@@ -143,30 +167,6 @@ func getUserStatisticsHandler(c echo.Context) error {
 	if err := tx.GetContext(ctx, &totalReactions, query, username); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count total reactions: "+err.Error())
 	}
-
-	// ライブコメント数、チップ合計
-	type Tmp struct {
-		TotalLivecomments int64 `db:"totalLivecomments"`
-		TotalTip          int64 `db:"totalTip"`
-	}
-	var tmp Tmp
-	query2 := `
-SELECT 
-	COUNT(lc.id) AS totalLivecomments, 
-	IFNULL(SUM(lc.tip), 0) AS totalTip 
-FROM 
-	livestreams ls
-	LEFT JOIN livecomments lc ON lc.livestream_id = ls.id
-WHERE
-	ls.user_id = ?
-`
-	if err := tx.GetContext(ctx, &tmp, query2, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams data: "+err.Error())
-	}
-	totalLivecomments := tmp.TotalLivecomments
-	totalTip := tmp.TotalTip
-	fmt.Println("ライブコメント数合計：", totalLivecomments)
-	fmt.Println("チップ合計：", totalTip)
 
 	// 合計視聴者数
 	var viewersCount int64
