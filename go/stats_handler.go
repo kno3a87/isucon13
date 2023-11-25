@@ -116,17 +116,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 		rank++
 	}
 
-	// totalReactions := user.TotalReaction
-	// リアクション数
-	var totalReactions int64
-	query := `SELECT COUNT(*) FROM users u 	
-    INNER JOIN livestreams l ON l.user_id = u.id 	
-    INNER JOIN reactions r ON r.livestream_id = l.id	
-    WHERE u.name = ?	
-	`
-	if err := tx.GetContext(ctx, &totalReactions, query, username); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count total reactions: "+err.Error())
-	}
+	totalReactions := user.TotalReaction
 
 	// ライブコメント数、チップ合計
 	type Tmp struct {
@@ -177,7 +167,7 @@ WHERE
 
 	// お気に入り絵文字
 	var favoriteEmoji string
-	query = `
+	query := `
 	SELECT r.emoji_name
 	FROM users u
 	INNER JOIN livestreams l ON l.user_id = u.id
