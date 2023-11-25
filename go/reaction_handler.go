@@ -134,6 +134,11 @@ func postReactionHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fill reaction: "+err.Error())
 	}
 
+	// 付与したreactionを配信者の users テーブルの total_reaction に加算する
+	if _, err := tx.ExecContext(ctx, "UPDATE users SET total_reaction = total_reaction + 1 WHERE id = (SELECT user_id FROM livestreams WHERE id = ?)", livestreamID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update total_reaction: "+err.Error())
+	}
+
 	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
 	}

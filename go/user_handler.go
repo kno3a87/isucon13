@@ -38,6 +38,7 @@ type UserModel struct {
 	Description    string `db:"description"`
 	HashedPassword string `db:"password"`
 	TotalTip       int64  `db:"total_tip"`
+	TotalReaction  int64  `db:"total_reaction"`
 }
 
 type User struct {
