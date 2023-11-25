@@ -153,7 +153,7 @@ func postIconHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert new user icon: "+err.Error())
 	}
 
-	saveImage(userID, req.Image)
+	go saveImage(userID, req.Image)
 
 	iconID, err := rs.LastInsertId()
 	if err != nil {
