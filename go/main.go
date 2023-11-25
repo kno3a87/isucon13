@@ -122,7 +122,7 @@ func initializeHandler(c echo.Context) error {
 
 	var allTags []Tag
 	// 全タグを取得してグローバル変数に格納しておく
-	if err := dbConn.Select(&allTags, "SELECT * FROM tag"); err != nil {
+	if err := dbConn.Select(&allTags, "SELECT * FROM tags"); err != nil {
 		c.Logger().Warnf("failed to get all tags: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+err.Error())
 	}
