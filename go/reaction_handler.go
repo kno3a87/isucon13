@@ -135,7 +135,7 @@ func postReactionHandler(c echo.Context) error {
 	}
 
 	// 付与したreactionを users テーブルの total_reaction に加算する
-	if _, err := tx.ExecContext(ctx, "UPDATE users SET total_reaction = total_reaction + ? WHERE id = ?", 1, userID); err != nil {
+	if _, err := tx.ExecContext(ctx, "UPDATE users SET total_reaction = total_reaction + 1 WHERE id = ?", userID); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update total_reaction: "+err.Error())
 	}
 
