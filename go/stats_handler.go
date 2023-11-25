@@ -97,7 +97,6 @@ func getUserStatisticsHandler(c echo.Context) error {
 	var ranking UserRanking
 	for _, user := range users {
 		var reactions int64
-		var tips int64
 
 		query := `
 		SELECT COUNT(*) FROM users u
@@ -107,7 +106,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 		if err := tx.GetContext(ctx, &reactions, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to count reactions: "+err.Error())
 		}
-		tips = user.TotalTip
+		tips := user.TotalTip
 
 		score := reactions + tips
 		ranking = append(ranking, UserRankingEntry{
