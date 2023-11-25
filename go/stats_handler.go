@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -143,73 +144,44 @@ func getUserStatisticsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count total reactions: "+err.Error())
 	}
 
-	// ライブコメント数、チップ合計，合計視聴者数
+	// ライブコメント数、チップ合計
 	type Tmp struct {
-		TotalLivecomments int64 `db:"livecomments_count"`
-		TotalTip          int64 `db:"total_tip"`
-		ViewersCount      int64 `db:"viewers_count"`
+		TotalLivecomments int64 `db:"totalLivecomments"`
+		TotalTip          int64 `db:"totalTip"`
 	}
 	var tmp Tmp
 	query2 := `
-SELECT
-    livestreams.*,
-    COUNT(livecomments.id) AS livecomments_count,
-    SUM(livecomments.tip) AS total_tip,
-    COALESCE(SUM(livestream_viewers_history_count.count), 0) AS viewers_count
-FROM
-    livestreams
-LEFT JOIN
-    livecomments ON livestreams.id = livecomments.livestream_id
-LEFT JOIN
-    (SELECT livestream_id, COUNT(*) AS count FROM livestream_viewers_history GROUP BY livestream_id) AS livestream_viewers_history_count
-    ON livestreams.id = livestream_viewers_history_count.livestream_id
+SELECT 
+	COUNT(lc.id) AS totalLivecomments, 
+	IFNULL(SUM(lc.tip), 0) AS totalTip 
+FROM 
+	livestreams ls
+	LEFT JOIN livecomments lc ON lc.livestream_id = ls.id
 WHERE
-    livestreams.user_id = ?
-GROUP BY
-    livestreams.id;
-	`
+	ls.user_id = ?
+`
 	if err := tx.GetContext(ctx, &tmp, query2, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams data: "+err.Error())
 	}
+	totalLivecomments := tmp.TotalLivecomments
+	totalTip := tmp.TotalTip
+	fmt.Println("ライブコメント数合計：", totalLivecomments)
+	fmt.Println("チップ合計：", totalTip)
 
-	// ライブコメント数、チップ合計
-	// 	type Tmp struct {
-	// 		TotalLivecomments int64 `db:"totalLivecomments"`
-	// 		TotalTip          int64 `db:"totalTip"`
-	// 	}
-	// 	var tmp Tmp
-	// 	query2 := `
-	// SELECT
-	// 	COUNT(lc.id) AS totalLivecomments,
-	// 	IFNULL(SUM(lc.tip), 0) AS totalTip
-	// FROM
-	// 	livestreams ls
-	// 	LEFT JOIN livecomments lc ON lc.livestream_id = ls.id
-	// WHERE
-	// 	ls.user_id = ?
-	// `
-	// 	if err := tx.GetContext(ctx, &tmp, query2, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-	// 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams data: "+err.Error())
-	// 	}
-	// 	totalLivecomments := tmp.TotalLivecomments
-	// 	totalTip := tmp.TotalTip
-	// 	fmt.Println("ライブコメント数合計：", totalLivecomments)
-	// 	fmt.Println("チップ合計：", totalTip)
-
-	// 	// 合計視聴者数
-	// 	var viewersCount int64
-	// 	query3 := `
-	// SELECT
-	// 	IFNULL(SUM(viewersCount), 0) AS viewersCount
-	// FROM
-	// 	livestream_viewers_history
-	// WHERE
-	// 	livestream_id IN (SELECT id FROM livestreams WHERE user_id = ?)
-	// `
-	// 	if err := tx.GetContext(ctx, &viewersCount, query3, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-	// 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get viewers count: "+err.Error())
-	// 	}
-	// 	fmt.Println("合計視聴者数：", viewersCount)
+	// 合計視聴者数
+	var viewersCount int64
+	query3 := `
+SELECT 
+	IFNULL(SUM(viewersCount), 0) AS viewersCount 
+FROM 
+	livestream_viewers_history 
+WHERE 
+	livestream_id IN (SELECT id FROM livestreams WHERE user_id = ?)
+`
+	if err := tx.GetContext(ctx, &viewersCount, query3, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get viewers count: "+err.Error())
+	}
+	fmt.Println("合計視聴者数：", viewersCount)
 
 	// お気に入り絵文字
 	var favoriteEmoji string
@@ -229,10 +201,10 @@ GROUP BY
 
 	stats := UserStatistics{
 		Rank:              rank,
-		ViewersCount:      tmp.ViewersCount,
+		ViewersCount:      viewersCount,
 		TotalReactions:    totalReactions,
-		TotalLivecomments: tmp.TotalLivecomments,
-		TotalTip:          tmp.TotalTip,
+		TotalLivecomments: totalLivecomments,
+		TotalTip:          totalTip,
 		FavoriteEmoji:     favoriteEmoji,
 	}
 	return c.JSON(http.StatusOK, stats)
