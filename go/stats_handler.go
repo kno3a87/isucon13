@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -162,6 +163,10 @@ WHERE
 	if err := tx.GetContext(ctx, &tmp, query2, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams data: "+err.Error())
 	}
+	totalLivecomments := tmp.TotalLivecomments
+	totalTip := tmp.TotalTip
+	fmt.Println("ライブコメント数合計：", totalLivecomments)
+	fmt.Println("チップ合計：", totalTip)
 
 	// 合計視聴者数
 	var viewersCount int64
@@ -176,6 +181,7 @@ WHERE
 	if err := tx.GetContext(ctx, &viewersCount, query3, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get viewers count: "+err.Error())
 	}
+	fmt.Println("合計視聴者数：", viewersCount)
 
 	// お気に入り絵文字
 	var favoriteEmoji string
@@ -197,8 +203,8 @@ WHERE
 		Rank:              rank,
 		ViewersCount:      viewersCount,
 		TotalReactions:    totalReactions,
-		TotalLivecomments: tmp.TotalLivecomments,
-		TotalTip:          tmp.TotalTip,
+		TotalLivecomments: totalLivecomments,
+		TotalTip:          totalTip,
 		FavoriteEmoji:     favoriteEmoji,
 	}
 	return c.JSON(http.StatusOK, stats)
