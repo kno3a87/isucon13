@@ -95,25 +95,19 @@ func getUserStatisticsHandler(c echo.Context) error {
 	}
 
 	var ranking UserRanking
-	type Tmp2 struct {
-		ReactionCount int64 `db:"reaction_count"`
-		TotalTip      int64 `db:"total_tip"`
-	}
-	var tmp2 Tmp2
 	for _, user := range users {
 		var reactions int64
 		var tips int64
 
 		query := `
-		SELECT COUNT(*) AS reaction_count, u.total_tip FROM users u
+		SELECT COUNT(*) AS reaction_count FROM users u
 		INNER JOIN livestreams l ON l.user_id = u.id
 		INNER JOIN reactions r ON r.livestream_id = l.id
 		WHERE u.id = ?`
-		if err := tx.GetContext(ctx, &tmp2, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		if err := tx.GetContext(ctx, &reactions, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to count reactions: "+err.Error())
 		}
-		reactions = tmp2.ReactionCount
-		tips = tmp2.TotalTip
+		tips = user.TotalTip
 
 		// var tips int64
 		// query = `
